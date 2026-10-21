@@ -399,10 +399,250 @@ static int GetInfo(lua_State* L)
     return 1; // table info
 }
 
+static bool IsRGBAImageType(lua_State* L, int table_index)
+{
+    int top = lua_gettop(L);
+    bool result = false;
+
+    lua_getfield(L, table_index, "type");
+
+    if (lua_type(L, -1) == LUA_TSTRING)
+    {
+        const char* type = lua_tostring(L, -1);
+        result = type && strcmp(type, "rgba") == 0;
+        lua_settop(L, top);
+        return result;
+    }
+
+    int supplied_type = lua_gettop(L);
+
+    lua_getglobal(L, "image");
+
+    if (lua_istable(L, -1))
+    {
+        lua_getfield(L, -1, "TYPE_RGBA");
+
+        if (!lua_isnil(L, -1))
+        {
+            result = lua_equal(L, supplied_type, lua_gettop(L)) != 0;
+        }
+    }
+
+    lua_settop(L, top);
+    return result;
+}
+
+static void PushRGBAImageType(lua_State* L)
+{
+    lua_getglobal(L, "image");
+
+    if (lua_istable(L, -1))
+    {
+        lua_getfield(L, -1, "TYPE_RGBA");
+
+        if (!lua_isnil(L, -1))
+        {
+            lua_remove(L, -2);
+            return;
+        }
+
+        lua_pop(L, 1);
+    }
+
+    lua_pop(L, 1);
+
+    // Fallback - Defold GUI functions also accept "rgba".
+    lua_pushstring(L, "rgba");
+}
+
+// webp.encode_imgbuffer(image [, options])
+//
+// image = {
+//     width  = number,
+//     height = number,
+//     type   = image.TYPE_RGBA,
+//     buffer = raw RGBA string
+// }
+//
+// returns raw WebP bytes as a Lua string
+static int Encode_imgbuffer(lua_State* L)
+{
+    luaL_checktype(L, 1, LUA_TTABLE);
+
+    if (!IsRGBAImageType(L, 1))
+    {
+        return luaL_error(L, "webp: image.type must be image.TYPE_RGBA");
+    }
+
+    lua_getfield(L, 1, "width");
+    int width = (int)luaL_checkinteger(L, -1);
+    lua_pop(L, 1);
+
+    lua_getfield(L, 1, "height");
+    int height = (int)luaL_checkinteger(L, -1);
+    lua_pop(L, 1);
+
+    if (width <= 0 || height <= 0)
+    {
+        return luaL_error(L, "webp: width and height must be positive integers");
+    }
+
+    lua_getfield(L, 1, "buffer");
+
+    size_t rgba_size = 0;
+    const char* rgba = luaL_checklstring(L, -1, &rgba_size);
+
+    size_t pixel_count = (size_t)width * (size_t)height;
+
+    if (pixel_count > ((size_t)-1) / 4)
+    {
+        return luaL_error(L, "webp: image dimensions are too large");
+    }
+
+    size_t expected_size = pixel_count * 4;
+
+    if (rgba_size != expected_size)
+    {
+        return luaL_error(L, "webp: RGBA buffer size is %d bytes, expected %d", (int)rgba_size, (int)expected_size);
+    }
+
+    WebPConfig config;
+
+    if (!WebPConfigInit(&config))
+    {
+        return luaL_error(L, "webp: WebPConfigInit failed");
+    }
+
+    ParseEncoderConfig(L, 2, &config);
+
+    if (!WebPValidateConfig(&config))
+    {
+        return luaL_error(L, "webp: invalid encoder config");
+    }
+
+    WebPPicture picture;
+
+    if (!WebPPictureInit(&picture))
+    {
+        return luaL_error(L, "webp: WebPPictureInit failed");
+    }
+
+    picture.use_argb = 1;
+    picture.width = width;
+    picture.height = height;
+
+    const int row_bytes = width * 4;
+
+    if (!WebPPictureImportRGBA(&picture, (const uint8_t*)rgba, row_bytes))
+    {
+        WebPPictureFree(&picture);
+        return luaL_error(L, "webp: WebPPictureImportRGBA failed");
+    }
+
+    WebPMemoryWriter writer;
+    WebPMemoryWriterInit(&writer);
+
+    picture.writer = WebPMemoryWrite;
+    picture.custom_ptr = &writer;
+
+    int encode_ok = WebPEncode(&config, &picture);
+    WebPEncodingError error_code = picture.error_code;
+
+    WebPPictureFree(&picture);
+
+    if (!encode_ok)
+    {
+        WebPMemoryWriterClear(&writer);
+        return luaL_error(L, "webp: WebPEncode failed (error code %d)", (int)error_code);
+    }
+
+    lua_pushlstring(L, (const char*)writer.mem, writer.size);
+
+    WebPMemoryWriterClear(&writer);
+
+    return 1;
+}
+
+// webp.Decode_imgbuffer(data)
+//
+// data = raw WebP bytes
+//
+// returns {
+//     width  = number,
+//     height = number,
+//     type   = image.TYPE_RGBA,
+//     buffer = raw RGBA string
+// }
+static int Decode_imgbuffer(lua_State* L)
+{
+    size_t webp_size = 0;
+    const uint8_t* webp_data = (const uint8_t*)luaL_checklstring(L, 1, &webp_size);
+
+    if (webp_size == 0)
+    {
+        return luaL_error(L, "webp: input data is empty");
+    }
+
+    WebPBitstreamFeatures features;
+    VP8StatusCode status = WebPGetFeatures(webp_data, webp_size, &features);
+
+    const char* error = GetWebPError(status);
+
+    if (error)
+    {
+        return luaL_error(L, "webp: %s", error);
+    }
+
+    int width = 0;
+    int height = 0;
+
+    uint8_t* rgba = WebPDecodeRGBA(webp_data, webp_size, &width, &height);
+
+    if (!rgba)
+    {
+        return luaL_error(L, "webp: WebPDecodeRGBA failed");
+    }
+
+    if (width <= 0 || height <= 0)
+    {
+        WebPFree(rgba);
+        return luaL_error(L, "webp: decoded image has invalid dimensions");
+    }
+
+    size_t pixel_count = (size_t)width * (size_t)height;
+
+    if (pixel_count > ((size_t)-1) / 4)
+    {
+        WebPFree(rgba);
+        return luaL_error(L, "webp: decoded image is too large");
+    }
+
+    size_t rgba_size = pixel_count * 4;
+
+    lua_newtable(L);
+
+    lua_pushinteger(L, width);
+    lua_setfield(L, -2, "width");
+
+    lua_pushinteger(L, height);
+    lua_setfield(L, -2, "height");
+
+    PushRGBAImageType(L);
+    lua_setfield(L, -2, "type");
+
+    lua_pushlstring(L, (const char*)rgba, rgba_size);
+    lua_setfield(L, -2, "buffer");
+
+    WebPFree(rgba);
+
+    return 1;
+}
 static const luaL_reg Module_methods[] =
 {
     {"decode",   Decode},
     {"encode",   Encode},
+    {"decode_imgbuffer",   Decode_imgbuffer},
+    {"encode_imgbuffer",   Encode_imgbuffer},
     {"get_info", GetInfo},
     {0, 0}
 };
