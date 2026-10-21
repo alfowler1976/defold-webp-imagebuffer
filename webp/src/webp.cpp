@@ -455,7 +455,7 @@ static void PushRGBAImageType(lua_State* L)
     lua_pushstring(L, "rgba");
 }
 
-// webp.encode_imgbuffer(image [, options])
+// webp.encode_imgbufferRGBA(image [, options])
 //
 // image = {
 //     width  = number,
@@ -465,7 +465,7 @@ static void PushRGBAImageType(lua_State* L)
 // }
 //
 // returns raw WebP bytes as a Lua string
-static int Encode_imgbuffer(lua_State* L)
+static int Encode_imgbufferRGBA(lua_State* L)
 {
     luaL_checktype(L, 1, LUA_TTABLE);
 
@@ -563,7 +563,7 @@ static int Encode_imgbuffer(lua_State* L)
     return 1;
 }
 
-// webp.Decode_imgbuffer(data)
+// webp.Decode_imgbufferRGBA(data)
 //
 // data = raw WebP bytes
 //
@@ -573,7 +573,7 @@ static int Encode_imgbuffer(lua_State* L)
 //     type   = image.TYPE_RGBA,
 //     buffer = raw RGBA string
 // }
-static int Decode_imgbuffer(lua_State* L)
+static int Decode_imgbufferRGBA(lua_State* L)
 {
     size_t webp_size = 0;
     const uint8_t* webp_data = (const uint8_t*)luaL_checklstring(L, 1, &webp_size);
@@ -641,8 +641,8 @@ static const luaL_reg Module_methods[] =
 {
     {"decode",   Decode},
     {"encode",   Encode},
-    {"decode_imgbuffer",   Decode_imgbuffer},
-    {"encode_imgbuffer",   Encode_imgbuffer},
+    {"decode_imgbufferRGBA",   Decode_imgbufferRGBA},
+    {"encode_imgbufferRGBA",   Encode_imgbufferRGBA},
     {"get_info", GetInfo},
     {0, 0}
 };
