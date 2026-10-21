@@ -16,7 +16,7 @@
       desc: Table of WebPDecoderOptions.
       optional: true
 
-  - name: decode_imgbuffer
+  - name: decode_imgbufferRGBA
     type: function
     desc: Decodes raw WebP image data to a Defold image-style table containing width, height, type and raw RGBA buffer data.
     parameters:
@@ -52,7 +52,7 @@
       desc: Table of WebPConfig options.
       optional: true
 
-  - name: encode_imgbuffer
+  - name: encode_imgbufferRGBA
     type: function
     desc: Encodes a Defold image-style table containing width, height, type and raw RGBA buffer data to WebP.
     parameters:
