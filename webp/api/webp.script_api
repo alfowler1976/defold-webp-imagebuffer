@@ -16,6 +16,21 @@
       desc: Table of WebPDecoderOptions.
       optional: true
 
+  - name: decode_imgbuffer
+    type: function
+    desc: Decodes raw WebP image data to a Defold image-style table containing width, height, type and raw RGBA buffer data.
+    parameters:
+    - name: image
+      type: string
+      desc: Raw WebP image data.
+      optional: false
+    returns:
+    - name: image_data
+      type: table
+      desc: Table containing width, height, type = image.TYPE_RGBA and buffer containing the raw RGBA byte string.
+    examples:
+    - desc: local image_data = webp.decode_imgbuffer(webp_data)
+
   - name: encode
     type: function
     desc: Encodes buffer to WebP image.
@@ -36,6 +51,25 @@
       type: table
       desc: Table of WebPConfig options.
       optional: true
+
+  - name: encode_imgbuffer
+    type: function
+    desc: Encodes a Defold image-style table containing width, height, type and raw RGBA buffer data to WebP.
+    parameters:
+    - name: image_data
+      type: table
+      desc: Table containing width, height, type = image.TYPE_RGBA and buffer containing the raw RGBA byte string.
+      optional: false
+    - name: options
+      type: table
+      desc: Optional WebPConfig settings such as lossless, quality, method, alpha_quality, near_lossless and exact.
+      optional: true
+    returns:
+    - name: webp_data
+      type: string
+      desc: Raw encoded WebP image data.
+    examples:
+    - desc: local webp_data = webp.encode_imgbuffer(image_data, { lossless = true, quality = 100, method = 6 })
 
   - name: get_info
     type: function
